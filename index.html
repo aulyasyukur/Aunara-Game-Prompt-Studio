@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AUNARA – AI Educational Game Prompt Studio</title>
+    <meta name="description" content="Studio perancang prompt game edukasi AI profesional (Create • Play • Learn) untuk guru, orang tua, dan kreator konten." />
+    <meta property="og:title" content="AUNARA – AI Educational Game Prompt Studio" />
+    <meta property="og:description" content="Studio perancang prompt game edukasi AI profesional (Create • Play • Learn) untuk guru, orang tua, dan kreator konten." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <script>
+      (function () {
+        try {
+          var saved = localStorage.getItem('aunara_theme_mode');
+          if (saved === 'dark' || (!saved && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
+          }
+        } catch (e) {}
+      })();
+    </script>
+  </head>
+  <body class="bg-[#F7F2E9] dark:bg-[#131F26] text-[#344E5B] dark:text-[#EBF1F3] antialiased min-h-screen selection:bg-[#E98F7B]/30 selection:text-[#344E5B] dark:selection:text-white">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+
