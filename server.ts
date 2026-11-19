@@ -8,6 +8,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
 import { GoogleGenAI, ThinkingLevel } from '@google/genai';
+import { registerAuthRoutes } from './server/auth.js';
 
 dotenv.config();
 
@@ -36,12 +37,16 @@ Aturan teknis sandbox:
 
 async function startServer() {
   const app = express();
+  app.set('trust proxy', 1);
   app.use(express.json({ limit: '2mb' }));
 
   // Health check
   app.get('/api/health', (_req, res) => {
     res.json({ status: 'ok', service: 'aunara-studio' });
   });
+
+  // Server-side Email/Password Authentication (zero client API keys)
+  registerAuthRoutes(app);
 
   // Live Gemini Prompt-to-Game Test & QA Verification Endpoint
   app.post('/api/test-prompt-game', async (req, res) => {

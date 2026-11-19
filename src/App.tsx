@@ -4,17 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import {
-  onAuthStateChanged,
-  signOut,
-  sendEmailVerification
-} from 'firebase/auth';
-import {
-  auth,
-  mapFirebaseUserToAuthUser,
-  mapFirebaseAuthError,
-  syncUserProfileToFirestore
-} from './firebase';
+import { AuthApi } from './services/authApi';
 import { Navbar } from './components/common/Navbar';
 import { Sidebar } from './components/common/Sidebar';
 import { Dashboard } from './components/dashboard/Dashboard';
@@ -36,15 +26,12 @@ import {
 } from './types/game';
 import { generateFullPrompt } from './services/promptEngine';
 import { StorageService } from './services/storage';
-import { MailCheck, X, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 
 export default function App() {
-  // Firebase + Local Auth State
-  const [authUser, setAuthUser] = useState<AuthUser | null>(() => StorageService.getAuthUser());
+  // Server-Side Session Auth State
+  const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [authReady, setAuthReady] = useState<boolean>(false);
-  const [dismissedVerifyBanner, setDismissedVerifyBanner] = useState<boolean>(false);
-  const [verifyNotice, setVerifyNotice] = useState<string>('');
-  const [verifyBusy, setVerifyBusy] = useState<boolean>(false);
 
   const [activeView, setActiveView] = useState<string>('dashboard');
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState<boolean>(false);
@@ -69,25 +56,26 @@ export default function App() {
     });
   };
 
-  // Subscribe to Firebase Auth state changes
+  // Restore verified session from backend on mount
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (fbUser) => {
-      if (fbUser) {
-        const mapped = mapFirebaseUserToAuthUser(fbUser);
-        setAuthUser(mapped);
-        if (fbUser.emailVerified) {
-          syncUserProfileToFirestore(fbUser).catch((err) => {
-            console.error('Gagal sinkronisasi profil pengguna:', err);
-          });
+    let active = true;
+    AuthApi.getCurrentUser()
+      .then((user) => {
+        if (active) {
+          setAuthUser(user);
+          setAuthReady(true);
         }
-      } else {
-        // Fall back to local admin session if present
-        setAuthUser(StorageService.getAuthUser());
-      }
-      setAuthReady(true);
-    });
+      })
+      .catch(() => {
+        if (active) {
+          setAuthUser(null);
+          setAuthReady(true);
+        }
+      });
 
-    return () => unsubscribe();
+    return () => {
+      active = false;
+    };
   }, []);
 
   // Storage synced state
@@ -116,59 +104,15 @@ export default function App() {
 
   const handleLoginSuccess = (user: AuthUser) => {
     setAuthUser(user);
-    setDismissedVerifyBanner(false);
-    setVerifyNotice('');
     setActiveView('dashboard');
     refreshStorage();
   };
 
   const handleLogout = async () => {
-    try {
-      if (auth.currentUser) {
-        await signOut(auth);
-      }
-    } catch (err) {
-      console.error('Gagal keluar dari Firebase Auth:', err);
-    }
-    StorageService.logout();
+    await AuthApi.logout();
     setAuthUser(null);
     setActiveView('dashboard');
     setIsMobileSidebarOpen(false);
-  };
-
-  const handleResendVerification = async () => {
-    const current = auth.currentUser;
-    if (!current || verifyBusy) return;
-    setVerifyBusy(true);
-    setVerifyNotice('');
-    try {
-      await sendEmailVerification(current);
-      setVerifyNotice('Email verifikasi telah dikirim ulang. Periksa kotak masuk atau folder spam Anda.');
-    } catch (err) {
-      setVerifyNotice(mapFirebaseAuthError(err));
-    } finally {
-      setVerifyBusy(false);
-    }
-  };
-
-  const handleCheckVerified = async () => {
-    const current = auth.currentUser;
-    if (!current || verifyBusy) return;
-    setVerifyBusy(true);
-    setVerifyNotice('');
-    try {
-      await current.reload();
-      if (auth.currentUser?.emailVerified) {
-        await syncUserProfileToFirestore(auth.currentUser).catch(() => {});
-        setAuthUser(mapFirebaseUserToAuthUser(auth.currentUser));
-      } else {
-        setVerifyNotice('Email belum terverifikasi. Klik tautan verifikasi pada email Anda lalu coba lagi.');
-      }
-    } catch (err) {
-      setVerifyNotice(mapFirebaseAuthError(err));
-    } finally {
-      setVerifyBusy(false);
-    }
   };
 
   // Auth initializing state
@@ -265,11 +209,6 @@ export default function App() {
     else setActiveView(view);
   };
 
-  const showEmailVerifyBanner =
-    authUser.authProvider === 'firebase-email' &&
-    authUser.emailVerified === false &&
-    !dismissedVerifyBanner;
-
   return (
     <div className="min-h-screen bg-[#F7F2E9] dark:bg-[#131F26] text-[#344E5B] dark:text-[#EBF1F3] flex flex-col font-sans selection:bg-[#E98F7B]/30 selection:text-[#344E5B] dark:selection:text-white transition-colors">
       {/* Top Navbar */}
@@ -307,54 +246,6 @@ export default function App() {
             isCollapsedDesktop ? 'lg:ml-20' : 'lg:ml-64'
           }`}
         >
-          {showEmailVerifyBanner && (
-            <div className="mb-5 rounded-2xl bg-[#FFFDF8] dark:bg-[#1C2D36] border border-[#6CAAA4]/35 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
-              <div className="flex items-start gap-3">
-                <div className="w-9 h-9 rounded-xl bg-[#6CAAA4]/15 text-[#6CAAA4] flex items-center justify-center shrink-0">
-                  <MailCheck className="w-4 h-4" />
-                </div>
-                <div className="text-xs leading-relaxed">
-                  <p className="font-bold text-[#344E5B] dark:text-[#F7F2E9]">
-                    Verifikasi alamat email Anda ({authUser.email})
-                  </p>
-                  <p className="text-[#344E5B]/70 dark:text-[#A9BCA6] mt-0.5">
-                    Klik tautan verifikasi yang kami kirim ke email Anda untuk mengaktifkan sinkronisasi profil cloud.
-                  </p>
-                  {verifyNotice && (
-                    <p className="mt-1.5 font-semibold text-[#6CAAA4]">{verifyNotice}</p>
-                  )}
-                </div>
-              </div>
-
-              <div className="flex items-center flex-wrap gap-2 shrink-0">
-                <button
-                  type="button"
-                  disabled={verifyBusy}
-                  onClick={handleCheckVerified}
-                  className="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-[#6CAAA4] text-white hover:bg-[#52918B] transition-colors disabled:opacity-60"
-                >
-                  Saya Sudah Verifikasi
-                </button>
-                <button
-                  type="button"
-                  disabled={verifyBusy}
-                  onClick={handleResendVerification}
-                  className="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-[#F7F2E9] dark:bg-white/10 text-[#344E5B] dark:text-[#F7F2E9] hover:bg-[#A9BCA6]/25 transition-colors disabled:opacity-60"
-                >
-                  Kirim Ulang
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setDismissedVerifyBanner(true)}
-                  aria-label="Tutup pemberitahuan"
-                  className="p-1.5 rounded-lg text-[#344E5B]/55 dark:text-[#A9BCA6] hover:bg-[#F7F2E9] dark:hover:bg-white/10"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-          )}
-
           {activeView === 'dashboard' && (
             <Dashboard
               onNavigate={handleNavigate}

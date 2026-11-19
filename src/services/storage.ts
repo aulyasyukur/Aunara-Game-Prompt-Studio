@@ -3,18 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { SavedPrompt, GameCharacter, AuthUser } from '../types/game';
+import { SavedPrompt, GameCharacter } from '../types/game';
 
 const PROMPTS_STORAGE_KEY = 'aunara_saved_prompts_v1';
 const CHARACTERS_STORAGE_KEY = 'aunara_saved_characters_v1';
-const AUTH_STORAGE_KEY = 'aunara_auth_session_v1';
-
-export const DEMO_ADMIN_CREDENTIALS = {
-  username: 'admin',
-  password: 'admin123',
-  displayName: 'Admin Uji Coba',
-  role: 'Administrator Studio'
-};
 
 export const DEFAULT_CHARACTERS: GameCharacter[] = [
   {
@@ -139,58 +131,6 @@ export const StorageService = {
     const filtered = list.filter((c) => c.id !== id);
     localStorage.setItem(CHARACTERS_STORAGE_KEY, JSON.stringify(filtered));
     return true;
-  },
-
-  // AUTH SESSION (Local Admin fallback)
-  getAuthUser(): AuthUser | null {
-    try {
-      const raw = localStorage.getItem(AUTH_STORAGE_KEY);
-      if (!raw) return null;
-      const parsed = JSON.parse(raw) as AuthUser;
-      return {
-        ...parsed,
-        authProvider: parsed.authProvider || 'local-admin'
-      };
-    } catch {
-      return null;
-    }
-  },
-
-  loginDemoAdmin(username: string, password: string): { ok: boolean; user?: AuthUser; error?: string } {
-    const cleanUser = username.trim().toLowerCase();
-    const cleanPass = password.trim();
-
-    if (
-      cleanUser === DEMO_ADMIN_CREDENTIALS.username &&
-      cleanPass === DEMO_ADMIN_CREDENTIALS.password
-    ) {
-      const user: AuthUser = {
-        username: DEMO_ADMIN_CREDENTIALS.username,
-        displayName: DEMO_ADMIN_CREDENTIALS.displayName,
-        role: DEMO_ADMIN_CREDENTIALS.role,
-        authProvider: 'local-admin',
-        loggedInAt: new Date().toISOString()
-      };
-      try {
-        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(user));
-      } catch {
-        // ignore storage errors
-      }
-      return { ok: true, user };
-    }
-
-    return {
-      ok: false,
-      error: 'Username atau kata sandi tidak valid. Silakan periksa kembali.'
-    };
-  },
-
-  logout(): void {
-    try {
-      localStorage.removeItem(AUTH_STORAGE_KEY);
-    } catch {
-      // ignore
-    }
   },
 
   // UTILITIES

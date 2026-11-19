@@ -232,9 +232,8 @@ export interface AuthUser {
   displayName: string;
   email?: string;
   photoUrl?: string;
-  emailVerified?: boolean;
   role: string;
-  authProvider: 'firebase-google' | 'firebase-email' | 'firebase-both' | 'local-admin';
+  authProvider: 'server-email';
   loggedInAt: string;
 }
 

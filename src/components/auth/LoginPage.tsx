@@ -4,20 +4,8 @@
  */
 
 import React, { useState } from 'react';
-import {
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-  updateProfile,
-  sendEmailVerification
-} from 'firebase/auth';
-import {
-  auth,
-  mapFirebaseUserToAuthUser,
-  mapFirebaseAuthError,
-  syncUserProfileToFirestore
-} from '../../firebase';
+import { AuthApi } from '../../services/authApi';
 import { AunaraLogo } from '../common/AunaraLogo';
-import { StorageService } from '../../services/storage';
 import { AuthUser } from '../../types/game';
 import {
   Lock,
@@ -52,7 +40,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
   const [activeTab, setActiveTab] = useState<AuthTab>('login');
 
   // Login fields
-  const [identifier, setIdentifier] = useState<string>('');
+  const [email, setEmail] = useState<string>('');
   const [password, setPassword] = useState<string>('');
 
   // Register fields
@@ -75,30 +63,20 @@ export const LoginPage: React.FC<LoginPageProps> = ({
     e.preventDefault();
     setError('');
 
-    const cleanId = identifier.trim();
-    if (!cleanId || !password.trim()) {
-      setError('Mohon masukkan email atau username serta kata sandi terlebih dahulu.');
+    const cleanEmail = email.trim();
+    if (!cleanEmail || !password.trim()) {
+      setError('Mohon masukkan alamat email dan kata sandi terlebih dahulu.');
       return;
     }
 
     setIsSubmitting(true);
     try {
-      if (cleanId.includes('@')) {
-        const cred = await signInWithEmailAndPassword(auth, cleanId, password);
-        syncUserProfileToFirestore(cred.user).catch((syncErr) => {
-          console.error('Gagal menyinkronkan profil:', syncErr);
-        });
-        onLoginSuccess(mapFirebaseUserToAuthUser(cred.user));
+      const res = await AuthApi.login(cleanEmail, password);
+      if (res.ok && res.user) {
+        onLoginSuccess(res.user);
       } else {
-        const res = StorageService.loginDemoAdmin(cleanId, password);
-        if (res.ok && res.user) {
-          onLoginSuccess(res.user);
-        } else {
-          setError(res.error || 'Email/username atau kata sandi tidak valid.');
-        }
+        setError(res.error || 'Email atau kata sandi tidak valid.');
       }
-    } catch (err) {
-      setError(mapFirebaseAuthError(err));
     } finally {
       setIsSubmitting(false);
     }
@@ -111,8 +89,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({
     const cleanName = fullName.trim();
     const cleanEmail = regEmail.trim();
 
-    if (!cleanName) {
-      setError('Mohon masukkan nama lengkap Anda.');
+    if (!cleanName || cleanName.length < 2) {
+      setError('Mohon masukkan nama lengkap minimal 2 karakter.');
       return;
     }
     if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
@@ -130,18 +108,16 @@ export const LoginPage: React.FC<LoginPageProps> = ({
 
     setIsSubmitting(true);
     try {
-      const cred = await createUserWithEmailAndPassword(auth, cleanEmail, regPassword);
-      await updateProfile(cred.user, { displayName: cleanName }).catch(() => {});
-      await sendEmailVerification(cred.user).catch(() => {});
-      onLoginSuccess(mapFirebaseUserToAuthUser(cred.user, cleanName));
-    } catch (err) {
-      setError(mapFirebaseAuthError(err));
+      const res = await AuthApi.register(cleanName, cleanEmail, regPassword);
+      if (res.ok && res.user) {
+        onLoginSuccess(res.user);
+      } else {
+        setError(res.error || 'Gagal mendaftarkan akun baru.');
+      }
     } finally {
       setIsSubmitting(false);
     }
   };
-
-  const isBusy = isSubmitting;
 
   return (
     <div className="min-h-screen bg-[#F7F2E9] dark:bg-[#131F26] text-[#344E5B] dark:text-[#EBF1F3] flex flex-col justify-between transition-colors">
@@ -235,7 +211,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
             <div className="grid grid-cols-2 p-1 rounded-xl bg-[#F7F2E9] dark:bg-[#131F26] border border-[#344E5B]/10 dark:border-white/10 mb-6">
               <button
                 type="button"
-                disabled={isBusy}
+                disabled={isSubmitting}
                 onClick={() => switchTab('login')}
                 className={`py-2 px-3 rounded-lg text-xs font-bold transition-all ${
                   activeTab === 'login'
@@ -247,7 +223,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
               </button>
               <button
                 type="button"
-                disabled={isBusy}
+                disabled={isSubmitting}
                 onClick={() => switchTab('register')}
                 className={`py-2 px-3 rounded-lg text-xs font-bold transition-all ${
                   activeTab === 'register'
@@ -265,7 +241,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
               </h2>
               <p className="text-xs text-[#344E5B]/70 dark:text-[#A9BCA6] mt-1.5 leading-relaxed">
                 {activeTab === 'login'
-                  ? 'Masukkan alamat email atau username beserta kata sandi Anda untuk mengakses studio.'
+                  ? 'Masukkan alamat email dan kata sandi Anda untuk mengakses studio.'
                   : 'Daftarkan akun baru dengan alamat email Anda untuk mulai merancang game edukasi.'}
               </p>
             </div>
@@ -274,21 +250,21 @@ export const LoginPage: React.FC<LoginPageProps> = ({
               <form onSubmit={handleLoginSubmit} className="space-y-4">
                 <div>
                   <label
-                    htmlFor="login-identifier"
+                    htmlFor="login-email"
                     className="block text-xs font-bold text-[#344E5B] dark:text-[#F7F2E9] mb-1.5"
                   >
-                    Email atau Username
+                    Alamat Email
                   </label>
                   <div className="relative">
                     <Mail className="w-4 h-4 text-[#344E5B]/45 dark:text-[#A9BCA6] absolute left-3.5 top-1/2 -translate-y-1/2" />
                     <input
-                      id="login-identifier"
-                      type="text"
-                      autoComplete="username"
-                      disabled={isBusy}
-                      value={identifier}
-                      onChange={(e) => setIdentifier(e.target.value)}
-                      placeholder="Masukkan email atau username"
+                      id="login-email"
+                      type="email"
+                      autoComplete="email"
+                      disabled={isSubmitting}
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="nama@email.com"
                       className="w-full pl-10 pr-4 py-2.5 rounded-xl text-sm bg-[#F7F2E9]/70 dark:bg-[#131F26] border border-[#344E5B]/15 dark:border-white/15 text-[#344E5B] dark:text-[#F7F2E9] placeholder:text-[#344E5B]/40 dark:placeholder:text-[#A9BCA6]/50 focus:outline-none focus:ring-2 focus:ring-[#6CAAA4] disabled:opacity-60"
                     />
                   </div>
@@ -307,7 +283,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                       id="login-password"
                       type={showPassword ? 'text' : 'password'}
                       autoComplete="current-password"
-                      disabled={isBusy}
+                      disabled={isSubmitting}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder="Masukkan kata sandi"
@@ -333,7 +309,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
 
                 <button
                   type="submit"
-                  disabled={isBusy}
+                  disabled={isSubmitting}
                   className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold text-white bg-gradient-to-r from-[#E98F7B] to-[#D4755F] hover:from-[#D4755F] hover:to-[#C0604A] shadow-sm transition-all active:scale-[0.99] disabled:opacity-60"
                 >
                   {isSubmitting ? (
@@ -359,7 +335,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                       id="reg-fullname"
                       type="text"
                       autoComplete="name"
-                      disabled={isBusy}
+                      disabled={isSubmitting}
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
                       placeholder="Nama lengkap Anda"
@@ -381,7 +357,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                       id="reg-email"
                       type="email"
                       autoComplete="email"
-                      disabled={isBusy}
+                      disabled={isSubmitting}
                       value={regEmail}
                       onChange={(e) => setRegEmail(e.target.value)}
                       placeholder="nama@email.com"
@@ -404,7 +380,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                         id="reg-password"
                         type={showRegPassword ? 'text' : 'password'}
                         autoComplete="new-password"
-                        disabled={isBusy}
+                        disabled={isSubmitting}
                         value={regPassword}
                         onChange={(e) => setRegPassword(e.target.value)}
                         placeholder="Min. 6 karakter"
@@ -434,7 +410,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                         id="reg-confirm-password"
                         type={showRegPassword ? 'text' : 'password'}
                         autoComplete="new-password"
-                        disabled={isBusy}
+                        disabled={isSubmitting}
                         value={regConfirmPassword}
                         onChange={(e) => setRegConfirmPassword(e.target.value)}
                         placeholder="Ulangi kata sandi"
@@ -453,7 +429,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
 
                 <button
                   type="submit"
-                  disabled={isBusy}
+                  disabled={isSubmitting}
                   className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold text-white bg-gradient-to-r from-[#6CAAA4] to-[#52918B] hover:from-[#52918B] hover:to-[#427A74] shadow-sm transition-all active:scale-[0.99] disabled:opacity-60"
                 >
                   {isSubmitting ? (
